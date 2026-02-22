@@ -1,6 +1,11 @@
-.gradle/
+.dart_tool/
+.packages
+.pub/
 build/
-**/build/
-.idea/
+android/.gradle/
+android/local.properties
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/
 *.iml
-local.properties
+.idea/
