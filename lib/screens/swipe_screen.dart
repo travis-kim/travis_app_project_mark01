@@ -24,7 +24,6 @@ class _SwipeScreenState extends State<SwipeScreen> {
   bool _loading = true;
   bool _permissionGranted = false;
   bool _limited = false;
-  String _statusMessage = '권한 확인 중...';
 
   int _currentIndex = 0;
   int _keepCount = 0;
@@ -42,8 +41,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
       _loading = true;
     });
 
-    final PermissionResult permission =
-        await _permissionService.requestGalleryPermission();
+    final PermissionResult permission = await _permissionService.requestGalleryPermission();
 
     if (!mounted) return;
 
@@ -51,7 +49,6 @@ class _SwipeScreenState extends State<SwipeScreen> {
       setState(() {
         _permissionGranted = false;
         _loading = false;
-        _statusMessage = permission.message;
       });
       return;
     }
@@ -63,12 +60,15 @@ class _SwipeScreenState extends State<SwipeScreen> {
       _permissionGranted = true;
       _limited = permission.limited;
       _loading = false;
-      _statusMessage = permission.message;
       _currentIndex = 0;
       _keepCount = 0;
       _trashCount = 0;
       _lastAction = null;
     });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(permission.message)),
+    );
   }
 
   AssetEntity? get _currentAsset {
@@ -161,10 +161,28 @@ class _SwipeScreenState extends State<SwipeScreen> {
     }
   }
 
+  Future<void> _tryLoadMoreIfNeeded() async {
+    if (_currentAsset != null || !_galleryLoader.hasMore) return;
+    setState(() {
+      _loading = true;
+    });
+    await _galleryLoader.loadNextPage();
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final AssetEntity? current = _currentAsset;
-    final bool completed = _permissionGranted && !_loading && current == null;
+    final bool completed = _permissionGranted && !_loading && current == null && !_galleryLoader.hasMore;
+
+    if (_permissionGranted && !_loading && current == null && _galleryLoader.hasMore) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _tryLoadMoreIfNeeded();
+      });
+    }
 
     if (completed) {
       return ResultScreen(
@@ -182,7 +200,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
             ? const Center(child: CircularProgressIndicator())
             : !_permissionGranted
                 ? _PermissionDeniedView(
-                    message: _statusMessage,
+                    message: '사진 권한이 거부되었습니다. 설정에서 권한을 허용해 주세요.',
                     onRequestAgain: _initialize,
                     onOpenSettings: _permissionService.openPermissionSettings,
                   )
@@ -198,7 +216,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
                       const SizedBox(height: 12),
                       Expanded(
                         child: current == null
-                            ? const Center(child: Text('사진을 불러오는 중 또는 항목 없음'))
+                            ? const Center(child: CircularProgressIndicator())
                             : _SwipeCard(
                                 asset: current,
                                 onSwipeLeft: _onTrash,
